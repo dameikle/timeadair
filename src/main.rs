@@ -46,23 +46,28 @@ fn draw_progress_bar(progress: f32, time: &str, message: &str, first_draw: bool)
 
     if first_draw {
         display_header()?;
-    } else {
-        execute!(io::stdout(), cursor::MoveTo(0, 3))?;
     }
+    
+    // Move cursor to specific positions for each line
+    execute!(io::stdout(), cursor::MoveTo(0, 3))?;
     execute!(io::stdout(), Clear(ClearType::FromCursorDown))?;
 
+    // Progress bar line
     print!("[");
-    execute!(
-        io::stdout(),
-        style::PrintStyledContent("=".repeat(filled).with(Color::Green))
-    )?;
-    execute!(
-        io::stdout(),
-        style::PrintStyledContent("-".repeat(empty).with(Color::DarkGrey))
-    )?;
-    println!("] {}% {}", progress as u32, time);
-    println!("\n{}", message);
-    println!("\nControls: 'q' to quit, 'r' to reset timer");
+    execute!(io::stdout(), 
+        style::PrintStyledContent("=".repeat(filled).with(Color::Green)))?;
+    execute!(io::stdout(), 
+        style::PrintStyledContent("-".repeat(empty).with(Color::DarkGrey)))?;
+    print!("] {}% {}", progress as u32, time);
+
+    // Message line
+    execute!(io::stdout(), cursor::MoveTo(0, 5))?;
+    print!("{}", message);
+
+    // Controls line
+    execute!(io::stdout(), cursor::MoveTo(0, 7))?;
+    print!("Controls: 'q' to quit, 'r' to reset timer");
+    
     io::stdout().flush()
 }
 
