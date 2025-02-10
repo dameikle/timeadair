@@ -1,11 +1,11 @@
 [package]
 name = "timeadair"
-version = "0.1.0"
+version = "0.1.1"
 description = "Command line cross-platform pomodoro timer"
 license = "Apache-2.0"
 repository = "https://github.com/dameikle/timeadair"
 edition = "2021"
 
 [dependencies]
-crossterm = "0.26"
+crossterm = "0.28.1"
 ctrlc = "3.4"
