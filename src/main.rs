@@ -39,12 +39,17 @@ fn clear_screen() -> io::Result<()> {
     execute!(io::stdout(), Clear(ClearType::All), cursor::MoveTo(0, 0))
 }
 
-fn draw_progress_bar(progress: f32, time: &str, message: &str) -> io::Result<()> {
+fn draw_progress_bar(progress: f32, time: &str, message: &str, first_draw: bool) -> io::Result<()> {
     let width = 50;
     let filled = (progress * width as f32 / 100.0) as usize;
     let empty = width - filled;
 
-    display_header()?;
+    if first_draw {
+        display_header()?;
+    } else {
+        execute!(io::stdout(), cursor::MoveTo(0, 3))?;
+    }
+    execute!(io::stdout(), Clear(ClearType::FromCursorDown))?;
 
     print!("[");
     execute!(
@@ -70,39 +75,50 @@ enum TimerResult {
 fn run_timer(duration: u64, type_name: &str) -> io::Result<TimerResult> {
     let mut timer = Timer::new(duration);
     enable_raw_mode()?;
+    execute!(io::stdout(), cursor::Hide)?;  // Hide cursor at the start
 
-    while timer.elapsed < timer.duration {
-        let progress = timer.get_progress();
-        let time = timer.format_time();
-        let message = format!("Current session: {}", type_name);
+    let message = format!("Current session: {}", type_name);
+    draw_progress_bar(timer.get_progress(), &timer.format_time(), &message, true)?;
 
-        draw_progress_bar(progress, &time, &message)?;
+    let result = loop {
         if event::poll(Duration::from_secs(1))? {
             if let Event::Key(KeyEvent { code, .. }) = event::read()? {
                 match code {
                     KeyCode::Char('q') | KeyCode::Char('Q') => {
-                        disable_raw_mode()?;
-                        display_header()?;
-                        println!("Pomodoro session ended. See you next time!");
-                        return Ok(TimerResult::Quit);
+                        break TimerResult::Quit;
                     }
                     KeyCode::Char('r') | KeyCode::Char('R') => {
-                        disable_raw_mode()?;
-                        display_header()?;
-                        println!("Timer reset.");
-                        return Ok(TimerResult::Reset);
+                        break TimerResult::Reset;
                     }
                     _ => {}
                 }
             }
         }
         timer.elapsed += 1;
-    }
+        if timer.elapsed >= timer.duration {
+            break TimerResult::Completed;
+        }
+        draw_progress_bar(timer.get_progress(), &timer.format_time(), &message, false)?;
+    };
 
+    execute!(io::stdout(), cursor::Show)?;
     disable_raw_mode()?;
-    print!("\x07");
-    io::stdout().flush()?;
-    Ok(TimerResult::Completed)
+
+    match result {
+        TimerResult::Quit => {
+            display_header()?;
+            println!("Pomodoro session ended. See you next time!");
+        }
+        TimerResult::Reset => {
+            display_header()?;
+            println!("Timer reset.");
+        }
+        TimerResult::Completed => {
+            print!("\x07");
+            io::stdout().flush()?;
+        }
+    }
+    Ok(result)
 }
 
 fn display_header() -> io::Result<()> {
@@ -113,6 +129,7 @@ fn display_header() -> io::Result<()> {
 
 fn prompt_session(session_type: &str) -> io::Result<bool> {
     display_header()?;
+    execute!(io::stdout(), cursor::Show)?;
     print!("Start {} session? [Y/n]: ", session_type);
     io::stdout().flush()?;
 
@@ -123,6 +140,7 @@ fn prompt_session(session_type: &str) -> io::Result<bool> {
 
 fn main() -> io::Result<()> {
     ctrlc::set_handler(move || {
+        let _ = execute!(io::stdout(), cursor::Show);
         let _ = disable_raw_mode();
         let _ = display_header();
         println!("Pomodoro session ended. See you next time!");
@@ -142,7 +160,6 @@ fn main() -> io::Result<()> {
             TimerResult::Quit => break,
             TimerResult::Reset => continue, // Go back to work session prompt
         }
-        
         if prompt_session("break")? {
             // Break session
             match run_timer(BREAK_TIME, "Break")? {
@@ -155,5 +172,6 @@ fn main() -> io::Result<()> {
         }
     }
 
+    execute!(io::stdout(), cursor::Show)?;
     Ok(())
 }
